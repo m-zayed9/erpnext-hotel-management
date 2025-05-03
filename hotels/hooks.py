@@ -43,6 +43,10 @@ app_license = "mit"
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
+doctype_js = {
+    "Purchase Invoice": "public/js/purchase_invoice.js",
+    "Booking": "public/js/booking.js"
+}
 # doctype_js = {"doctype" : "public/js/doctype.js"}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
@@ -136,6 +140,14 @@ app_license = "mit"
 # Document Events
 # ---------------
 # Hook on document methods and events
+
+doc_events = {
+    "Purchase Invoice": {
+        "validate": "hotels.custom.custom_validations.validate_purchase_invoice",
+        "on_update": "hotels.custom.custom_events.create_room_prices_on_submit",
+    }
+}
+
 
 # doc_events = {
 # 	"*": {

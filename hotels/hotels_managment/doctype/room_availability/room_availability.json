@@ -1,0 +1,93 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-05-03 10:16:34.458746",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "room_id",
+  "hotel_id",
+  "date",
+  "available_rooms",
+  "sold_rooms",
+  "adults_per_room",
+  "childs_per_room"
+ ],
+ "fields": [
+  {
+   "fieldname": "room_id",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Room",
+   "options": "Room",
+   "reqd": 1
+  },
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "available_rooms",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Available Rooms",
+   "non_negative": 1,
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "sold_rooms",
+   "fieldtype": "Int",
+   "label": "Sold Rooms",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "hotel_id",
+   "fieldtype": "Link",
+   "label": "Hotel",
+   "options": "Hotel",
+   "reqd": 1
+  },
+  {
+   "fieldname": "adults_per_room",
+   "fieldtype": "Int",
+   "label": "Adults Per Room",
+   "non_negative": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "childs_per_room",
+   "fieldtype": "Int",
+   "label": "Childs Per Room",
+   "non_negative": 1,
+   "reqd": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-05-03 10:26:05.831925",
+ "modified_by": "Administrator",
+ "module": "Hotels Managment",
+ "name": "Room Availability",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
