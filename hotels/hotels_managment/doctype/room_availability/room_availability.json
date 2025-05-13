@@ -11,7 +11,8 @@
   "available_rooms",
   "sold_rooms",
   "adults_per_room",
-  "childs_per_room"
+  "childs_per_room",
+  "price"
  ],
  "fields": [
   {
@@ -64,11 +65,18 @@
    "label": "Childs Per Room",
    "non_negative": 1,
    "reqd": 1
+  },
+  {
+   "fieldname": "price",
+   "fieldtype": "Float",
+   "label": "Price",
+   "precision": "2",
+   "reqd": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-05-03 10:26:05.831925",
+ "modified": "2025-05-05 00:13:20.972457",
  "modified_by": "Administrator",
  "module": "Hotels Managment",
  "name": "Room Availability",

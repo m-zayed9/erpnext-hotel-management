@@ -10,7 +10,8 @@
   "description",
   "beds",
   "max_adults",
-  "max_childs"
+  "max_childs",
+  "board_type"
  ],
  "fields": [
   {
@@ -49,11 +50,17 @@
    "fieldtype": "Int",
    "label": "Max Childs",
    "reqd": 1
+  },
+  {
+   "fieldname": "board_type",
+   "fieldtype": "Data",
+   "label": "Board Type",
+   "reqd": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-05-03 10:08:06.887523",
+ "modified": "2025-05-13 02:15:26.308798",
  "modified_by": "Administrator",
  "module": "Hotels Managment",
  "name": "Room Type",
