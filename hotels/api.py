@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 import frappe
 from frappe import _
 from frappe.utils import getdate
@@ -196,7 +197,7 @@ def get_hotel_rooms(hotel_id, checkin_date, checkout_date, adults, children, roo
 @frappe.whitelist(allow_guest=True)
 def get_room_details(room_id):
 
-    room_id,checkin_date, checkout_date, adults, childs, rooms = room_id.split('|')
+    room_id, checkin_date, checkout_date, adults, children, rooms = room_id.split("|")
     # Validate dates
     checkin_date = getdate(checkin_date)
     checkout_date = getdate(checkout_date)
@@ -252,9 +253,11 @@ def get_room_details(room_id):
         min_avail = min(e.available_rooms for e in entries)
         avg_price = sum(float(e.price) for e in entries) / num_days
 
-        if (entries[0].adults_per_room < int(adults) or
-            entries[0].childs_per_room < int(childs) or
-            min_avail < int(rooms)):
+        if (
+            entries[0].adults_per_room < int(adults)
+            or entries[0].childs_per_room < int(children)
+            or min_avail < int(rooms)
+        ):
             continue
 
         # Get room details
@@ -266,10 +269,10 @@ def get_room_details(room_id):
         # Prepare daily prices
 
         room_data = {
-            "room_id": room_id,
+            "room_id": f"{room_id}|{checkin_date}|{checkout_date}|{adults}|{children}|{rooms}",
             "available_rooms": min_avail,
             "average_price": round(avg_price, 2),
-            'currency': get_default_currency(),
+            "currency": get_default_currency(),
             "images": [img.image for img in room_doc.images],
             "amenities": [a.amenity_id for a in room_doc.amenities],
             "room_type": {
@@ -279,7 +282,7 @@ def get_room_details(room_id):
                 "beds": room_type_doc.beds,
                 "max_adults": room_type_doc.max_adults,
                 "max_childs": room_type_doc.max_childs,
-            }
+            },
         }
 
         rooms_data.append(room_data)
@@ -297,50 +300,150 @@ def create_booking(data):
 
     frappe.logger().info(f"Booking API Payload: {data}")
 
-    # ✅ REMOVE this block
-    # if not frappe.db.exists("Customer", data.get("customer")):
-    #     frappe.throw(_("Customer does not exist"), frappe.DoesNotExistError)
+    total_price = 0
+    booking_room_map = {}
 
+    aggregated = defaultdict(lambda: {"quantity": 0})
     for room in data.get("booking_rooms", []):
-        if not frappe.db.exists("Room", room.get("room_id")):
-            frappe.throw(
-                _("Room {0} does not exist").format(room.get("room_id")),
-                frappe.DoesNotExistError,
+        parts = room["room_id"].split("|")
+        key = room["room_id"]
+
+        if aggregated[key]["quantity"] == 0:
+            aggregated[key].update(
+                {
+                    "room_id": parts[0],
+                    "checkin_date": parts[1],
+                    "checkout_date": parts[2],
+                }
+            )
+        aggregated[key]["quantity"] += 1
+
+    # Final result list
+    result = list(aggregated.values())
+    booking_room_map = []
+    total_price = 0
+    checkin_date = None
+    checkout_date = None
+    for room in result:
+
+        checkin = datetime.strptime(room["checkin_date"], "%Y-%m-%d").date()
+        checkout = datetime.strptime(room["checkout_date"], "%Y-%m-%d").date()
+        checkin_date = checkin 
+        checkout_date = checkout
+        delta = (checkout - checkin).days
+
+        for day_offset in range(delta+1):
+            booking_date = checkin + timedelta(days=day_offset)
+            room_price = frappe.get_value(
+                "Room Availability",
+                filters={ 
+                    "room_id": room["room_id"],
+                    "date": booking_date,
+                },
+                fieldname=[
+                    "price",
+                ],
+            )
+            booking_room_map.append(
+                {
+                    "room_id": room["room_id"],
+                    "booking_date": booking_date,
+                    "price": room_price,
+                    "quantity": room["quantity"],
+                }
             )
 
-    try:
-        frappe.flags.ignore_permissions = True
+            total_price += room_price * room["quantity"]
 
-        booking = frappe.get_doc(
+    frappe.flags.ignore_permissions = True
+    booking = frappe.get_doc(
+        {
+            "doctype": "Booking",
+            "customer": ensure_customer_exists(data['customer']),
+            "check_in_date": checkin_date,
+            "check_out_date": checkout_date,
+            "total_price": total_price,
+            "booking_rooms": booking_room_map,
+        }
+    )
+    booking.insert(ignore_permissions=True)
+    booking.submit()
+
+    booking_dict = booking.as_dict()
+    return {"status": "success", "booking": get_booking_details(booking_dict["name"])}
+
+
+@frappe.whitelist(allow_guest=False)
+def get_booking_details(booking_id):
+    if not booking_id:
+        frappe.throw(_("Booking ID is required"))
+
+    booking = frappe.get_doc("Booking", booking_id)
+
+    data = {
+        "name": booking.name,
+        "customer": booking.customer,
+        "check_in_date": booking.check_in_date,
+        "check_out_date": booking.check_out_date,
+        "total_price": booking.total_price,
+        "currency": get_default_currency(),
+        "sales_invoice_id": booking.sales_invoice_id,
+        "rooms": [],
+    }
+
+    for booking_room in booking.booking_rooms:
+        room_doc = frappe.get_doc("Room", booking_room.room_id)
+        data['hotel_id'] = room_doc.hotel
+        # Get Room Type details
+        room_type_data = None
+        if room_doc.room_type:
+            room_type_doc = frappe.get_doc("Room Type", room_doc.room_type)
+            room_type_data = {
+                "name": room_type_doc.name,
+                "description": room_type_doc.description,
+                "beds": room_type_doc.beds,
+                "max_adults": room_type_doc.max_adults,
+                "max_childs": room_type_doc.max_childs,
+                "board_type": room_type_doc.board_type,
+            }
+
+        data["rooms"].append(
             {
-                "doctype": "Booking",
-                "customer": data.get("customer"),
-                "check_in_date": data.get("check_in_date", nowdate()),
-                "check_out_date": data.get("check_out_date", nowdate()),
-                "total_price": data.get("total_price", 0),
-                "booking_rooms": data.get("booking_rooms", []),
+                "room_id": room_doc.name,
+                "booking_date": booking_room.booking_date,
+                "price": booking_room.price,
+                "quantity": booking_room.quantity,
+                "hotel": room_doc.hotel,
+                "item_id": room_doc.item_id,
+                "room_type": room_type_data,
             }
         )
-        booking.insert(ignore_permissions=True)
-        booking.submit()
-
-        hotel_id = None
-        if booking.booking_rooms:
-            first_room_id = booking.booking_rooms[0].room_id
-            room_doc = frappe.get_doc("Room", first_room_id)
-            hotel_id = room_doc.hotel
-
-        booking_dict = booking.as_dict()
-        booking_dict["hotel_id"] = hotel_id
-
-        return {"status": "success", "booking": booking_dict}
-
-    except Exception as e:
-        frappe.log_error(message=frappe.get_traceback(), title="Booking API Error")
-        return {"status": "error", "message": str(e)}
+    return data
 
 
 def get_default_currency():
     global_defaults = frappe.get_doc("Global Defaults", "Global Defaults")
     currency = global_defaults.default_currency
     return currency
+
+
+def ensure_customer_exists(customer_name):
+
+    # Check if a customer exists by customer_name
+    existing_customer = frappe.get_value(
+        "Customer", {"customer_name": customer_name}, "name"
+    )
+
+    if not existing_customer:
+        new_customer = frappe.get_doc(
+            {
+                "doctype": "Customer",
+                "customer_name": customer_name,
+                "customer_type": "Individual",
+            }
+        ).insert(ignore_permissions=True)
+        customer = new_customer.name
+    else:
+        customer = existing_customer  # Link to existing customer.name
+    
+    return customer_name

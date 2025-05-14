@@ -10,20 +10,21 @@ class Booking(Document):
         if not self.customer:
             frappe.throw("Customer name is required to create a new Customer.")
 
-        # Check if a customer exists by customer_name, not name
-        customer_doc = frappe.db.get_value("Customer", {"customer_name": self.customer})
+        # Check if a customer exists by customer_name
+        customer_name = self.customer  # Temporarily treat it as customer_name
+        existing_customer = frappe.get_value("Customer", {"customer_name": customer_name}, "name")
 
-        if not customer_doc:
+        if not existing_customer:
             new_customer = frappe.get_doc(
                 {
                     "doctype": "Customer",
-                    "customer_name": self.customer,
+                    "customer_name": customer_name,
                     "customer_type": "Individual",
                 }
             ).insert(ignore_permissions=True)
             self.customer = new_customer.name
         else:
-            self.customer = customer_doc  # Link to existing
+            self.customer = existing_customer  # Link to existing customer.name
 
 
     def on_update(self):
