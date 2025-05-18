@@ -332,7 +332,7 @@ def create_booking(data):
         checkout_date = checkout
         delta = (checkout - checkin).days
 
-        for day_offset in range(delta+1):
+        for day_offset in range(delta):
             booking_date = checkin + timedelta(days=day_offset)
             room_price = frappe.get_value(
                 "Room Availability",
