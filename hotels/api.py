@@ -1,11 +1,79 @@
 from datetime import datetime, timedelta
 import frappe
 from frappe import _
-from frappe.utils import getdate
+from frappe.utils import getdate,flt
 from collections import defaultdict
 import json
 from frappe.utils import nowdate
+from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+from frappe.utils import flt, nowdate
 
+
+@frappe.whitelist(allow_guest=False)
+def add_payment_to_sales_invoice(invoice_name, paid_amount, payment_mode, paid_date=None, reference_no=None, reference_date=None):
+    try:
+        if not invoice_name or not paid_amount:
+            frappe.throw("Invoice name and paid amount required")
+        
+        paid_amount = flt(paid_amount)
+        paid_date = getdate(paid_date or nowdate())
+        reference_date = getdate(reference_date or paid_date)
+        
+        # Validate sales invoice
+        sales_invoice = frappe.get_doc("Sales Invoice", invoice_name)
+        if sales_invoice.docstatus != 1:
+            frappe.throw("Sales Invoice must be submitted")
+        
+        # Validate payment mode exists
+        if not frappe.db.exists("Mode of Payment", payment_mode):
+            frappe.throw(f"Payment mode '{payment_mode}' does not exist")
+        
+        # Create payment entry using the standard function
+        payment_entry = get_payment_entry(
+            dt="Sales Invoice",
+            dn=invoice_name,
+            party_amount=paid_amount
+        )
+        
+        # Set payment details
+        payment_entry.posting_date = paid_date
+        payment_entry.mode_of_payment = payment_mode
+        payment_entry.paid_amount = paid_amount
+        payment_entry.received_amount = paid_amount
+        
+        # Check if the payment mode is linked to a bank account
+        paid_to_account_type = frappe.db.get_value("Account", payment_entry.paid_to, "account_type")
+        if paid_to_account_type == "Bank":
+            # If paying to a bank account, reference details are mandatory
+            payment_entry.reference_no = reference_no or f"AUTO-{invoice_name}"
+            payment_entry.reference_date = reference_date
+        
+        # Update the payment amount allocated to the invoice
+        for ref in payment_entry.references:
+            if ref.reference_doctype == "Sales Invoice" and ref.reference_name == invoice_name:
+                ref.allocated_amount = paid_amount
+                break
+        
+        # Save the payment entry first
+        payment_entry.insert()
+        
+        # Submit the payment entry
+        payment_entry.submit()
+        
+        # Commit the transaction - This is crucial!
+        frappe.db.commit()
+        
+        return {
+            "payment_entry": payment_entry.name,
+            "status": "Success",
+            "message": "Payment entry created and submitted successfully"
+        }
+        
+    except Exception as e:
+        # Rollback in case of error
+        frappe.db.rollback()
+        frappe.log_error(f"Error creating payment entry: {str(e)}")
+        frappe.throw(f"Failed to create payment entry: {str(e)}")
 
 @frappe.whitelist(allow_guest=True)
 def search(checkin_date, checkout_date, adults, children, rooms):
