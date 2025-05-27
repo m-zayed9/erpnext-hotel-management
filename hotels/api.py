@@ -186,7 +186,8 @@ def get_hotel_rooms(hotel_id, checkin_date, checkout_date, adults, children, roo
         "latitude": hotel_doc.latitude,
         "longitude": hotel_doc.longitude,
         "images": [img.image for img in hotel_doc.images],
-        "amenities": [a.amenity_id for a in hotel_doc.amenities]
+        "amenities": [a.amenity_id for a in hotel_doc.amenities],
+        "currency": get_default_currency(),
     }
 
     # Fetch all room availability entries for this hotel
