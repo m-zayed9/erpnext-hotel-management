@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 import frappe
 from frappe import _
-from frappe.utils import getdate,flt
+from frappe.utils import getdate, flt
 from collections import defaultdict
 import json
 from frappe.utils import nowdate
@@ -10,70 +10,81 @@ from frappe.utils import flt, nowdate
 
 
 @frappe.whitelist(allow_guest=False)
-def add_payment_to_sales_invoice(invoice_name, paid_amount, payment_mode, paid_date=None, reference_no=None, reference_date=None):
+def add_payment_to_sales_invoice(
+    invoice_name,
+    paid_amount,
+    payment_mode,
+    paid_date=None,
+    reference_no=None,
+    reference_date=None,
+):
     try:
         if not invoice_name or not paid_amount:
             frappe.throw("Invoice name and paid amount required")
-        
+
         paid_amount = flt(paid_amount)
         paid_date = getdate(paid_date or nowdate())
         reference_date = getdate(reference_date or paid_date)
-        
+
         # Validate sales invoice
         sales_invoice = frappe.get_doc("Sales Invoice", invoice_name)
         if sales_invoice.docstatus != 1:
             frappe.throw("Sales Invoice must be submitted")
-        
+
         # Validate payment mode exists
         if not frappe.db.exists("Mode of Payment", payment_mode):
             frappe.throw(f"Payment mode '{payment_mode}' does not exist")
-        
+
         # Create payment entry using the standard function
         payment_entry = get_payment_entry(
-            dt="Sales Invoice",
-            dn=invoice_name,
-            party_amount=paid_amount
+            dt="Sales Invoice", dn=invoice_name, party_amount=paid_amount
         )
-        
+
         # Set payment details
         payment_entry.posting_date = paid_date
         payment_entry.mode_of_payment = payment_mode
         payment_entry.paid_amount = paid_amount
         payment_entry.received_amount = paid_amount
-        
+
         # Check if the payment mode is linked to a bank account
-        paid_to_account_type = frappe.db.get_value("Account", payment_entry.paid_to, "account_type")
+        paid_to_account_type = frappe.db.get_value(
+            "Account", payment_entry.paid_to, "account_type"
+        )
         if paid_to_account_type == "Bank":
             # If paying to a bank account, reference details are mandatory
             payment_entry.reference_no = reference_no or f"AUTO-{invoice_name}"
             payment_entry.reference_date = reference_date
-        
+
         # Update the payment amount allocated to the invoice
         for ref in payment_entry.references:
-            if ref.reference_doctype == "Sales Invoice" and ref.reference_name == invoice_name:
+            if (
+                ref.reference_doctype == "Sales Invoice"
+                and ref.reference_name == invoice_name
+            ):
                 ref.allocated_amount = paid_amount
                 break
-        
+
         # Save the payment entry first
         payment_entry.insert()
-        
+
         # Submit the payment entry
         payment_entry.submit()
-        
+
         # Commit the transaction - This is crucial!
         frappe.db.commit()
-        
+
         return {
             "payment_entry": payment_entry.name,
             "status": "Success",
-            "message": "Payment entry created and submitted successfully"
+            "message": "Payment entry created and submitted successfully",
         }
-        
+
     except Exception as e:
         # Rollback in case of error
         frappe.db.rollback()
         frappe.log_error(f"Error creating payment entry: {str(e)}")
         frappe.throw(f"Failed to create payment entry: {str(e)}")
+
 
 @frappe.whitelist(allow_guest=True)
 def search(checkin_date, checkout_date, adults, children, rooms):
@@ -88,9 +99,14 @@ def search(checkin_date, checkout_date, adults, children, rooms):
         "Room Availability",
         filters={"date": ["between", [checkin_date, checkout_date]]},
         fields=[
-            "room_id", "hotel_id", "price", "date",
-            "available_rooms", "adults_per_room", "childs_per_room"
-        ]
+            "room_id",
+            "hotel_id",
+            "price",
+            "date",
+            "available_rooms",
+            "adults_per_room",
+            "childs_per_room",
+        ],
     )
 
     # Group by (room_id, hotel_id)
@@ -115,12 +131,14 @@ def search(checkin_date, checkout_date, adults, children, rooms):
         ):
             continue
 
-        hotel_rooms[hotel_id].append({
-            "room_id": room_id,
-            "available_rooms": min_avail,
-            "average_price": round(avg_price, 2),
-            'currency': get_default_currency()
-        })
+        hotel_rooms[hotel_id].append(
+            {
+                "room_id": room_id,
+                "available_rooms": min_avail,
+                "average_price": round(avg_price, 2),
+                "currency": get_default_currency(),
+            }
+        )
 
     results = []
     for hotel_id, room_list in hotel_rooms.items():
@@ -140,11 +158,13 @@ def search(checkin_date, checkout_date, adults, children, rooms):
 
         lowest_avg_price = min(r["average_price"] for r in room_list)
 
-        results.append({
-            "hotel": hotel_data,
-            "rooms": room_list,
-            "lowest_avg_price": lowest_avg_price
-        })
+        results.append(
+            {
+                "hotel": hotel_data,
+                "rooms": room_list,
+                "lowest_avg_price": lowest_avg_price,
+            }
+        )
 
     return results
 
@@ -153,7 +173,7 @@ def search(checkin_date, checkout_date, adults, children, rooms):
 def get_hotel_rooms(hotel_id, checkin_date, checkout_date, adults, children, rooms):
     """
     Get detailed information about rooms available in a specific hotel for the given dates and guest requirements.
-    
+
     Args:
         hotel_id: The ID of the hotel to search
         checkin_date: Check-in date
@@ -161,7 +181,7 @@ def get_hotel_rooms(hotel_id, checkin_date, checkout_date, adults, children, roo
         adults: Number of adults per room
         childs: Number of children per room
         rooms: Number of rooms required
-    
+
     Returns:
         Dictionary containing hotel details and available rooms with their complete information
     """
@@ -195,12 +215,16 @@ def get_hotel_rooms(hotel_id, checkin_date, checkout_date, adults, children, roo
         "Room Availability",
         filters={
             "date": ["between", [checkin_date, checkout_date]],
-            "hotel_id": hotel_id
+            "hotel_id": hotel_id,
         },
         fields=[
-            "room_id", "price", "date", "available_rooms", 
-            "adults_per_room", "childs_per_room"
-        ]
+            "room_id",
+            "price",
+            "date",
+            "available_rooms",
+            "adults_per_room",
+            "childs_per_room",
+        ],
     )
 
     # Group by room_id
@@ -257,10 +281,11 @@ def get_hotel_rooms(hotel_id, checkin_date, checkout_date, adults, children, roo
     # Sort rooms by price (lowest first)
     rooms_data.sort(key=lambda x: x["average_price"])
 
-    return {
-        "hotel": hotel_data,
-        "rooms": rooms_data
-    }
+    # Set the lowest average price for the hotel based on all available rooms
+    if rooms_data:
+        hotel_data["lowest_avg_price"] = rooms_data[0]["average_price"]
+
+    return {"hotel": hotel_data, "rooms": rooms_data}
 
 
 @frappe.whitelist(allow_guest=True)
@@ -289,7 +314,7 @@ def get_room_details(room_id):
         "latitude": hotel_doc.latitude,
         "longitude": hotel_doc.longitude,
         "images": [img.image for img in hotel_doc.images],
-        "amenities": [a.amenity_id for a in hotel_doc.amenities]
+        "amenities": [a.amenity_id for a in hotel_doc.amenities],
     }
 
     # Fetch all room availability entries for this hotel
@@ -297,12 +322,16 @@ def get_room_details(room_id):
         "Room Availability",
         filters={
             "date": ["between", [checkin_date, checkout_date]],
-            "room_id": room_id
+            "room_id": room_id,
         },
         fields=[
-            "room_id", "price", "date", "available_rooms",
-            "adults_per_room", "childs_per_room"
-        ]
+            "room_id",
+            "price",
+            "date",
+            "available_rooms",
+            "adults_per_room",
+            "childs_per_room",
+        ],
     )
 
     # Group by room_id
@@ -356,10 +385,7 @@ def get_room_details(room_id):
 
         rooms_data.append(room_data)
 
-    return {
-        "hotel": hotel_data,
-        "room": rooms_data[0]
-    }
+    return {"hotel": hotel_data, "room": rooms_data[0]}
 
 
 @frappe.whitelist(allow_guest=False)
@@ -397,7 +423,7 @@ def create_booking(data):
 
         checkin = datetime.strptime(room["checkin_date"], "%Y-%m-%d").date()
         checkout = datetime.strptime(room["checkout_date"], "%Y-%m-%d").date()
-        checkin_date = checkin 
+        checkin_date = checkin
         checkout_date = checkout
         delta = (checkout - checkin).days
 
@@ -405,7 +431,7 @@ def create_booking(data):
             booking_date = checkin + timedelta(days=day_offset)
             room_price = frappe.get_value(
                 "Room Availability",
-                filters={ 
+                filters={
                     "room_id": room["room_id"],
                     "date": booking_date,
                 },
@@ -428,7 +454,7 @@ def create_booking(data):
     booking = frappe.get_doc(
         {
             "doctype": "Booking",
-            "customer": ensure_customer_exists(data['customer']),
+            "customer": ensure_customer_exists(data["customer"]),
             "check_in_date": checkin_date,
             "check_out_date": checkout_date,
             "total_price": total_price,
@@ -462,7 +488,7 @@ def get_booking_details(booking_id):
 
     for booking_room in booking.booking_rooms:
         room_doc = frappe.get_doc("Room", booking_room.room_id)
-        data['hotel_id'] = room_doc.hotel
+        data["hotel_id"] = room_doc.hotel
         # Get Room Type details
         room_type_data = None
         if room_doc.room_type:
@@ -514,5 +540,5 @@ def ensure_customer_exists(customer_name):
         customer = new_customer.name
     else:
         customer = existing_customer  # Link to existing customer.name
-    
+
     return customer_name
