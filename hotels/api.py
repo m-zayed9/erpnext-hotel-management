@@ -489,6 +489,8 @@ def get_booking_details(booking_id):
     for booking_room in booking.booking_rooms:
         room_doc = frappe.get_doc("Room", booking_room.room_id)
         data["hotel_id"] = room_doc.hotel
+        hotel_doc = frappe.get_doc("Hotel", room_doc.hotel)
+        data["chain_code"] = hotel_doc.chain_code
         # Get Room Type details
         room_type_data = None
         if room_doc.room_type:
