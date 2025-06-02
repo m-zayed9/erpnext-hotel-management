@@ -29,6 +29,21 @@ class Booking(Document):
 
     def on_update(self):
         self.create_sales_invoice()
+        self.update_room_stock()
+    
+    def update_room_stock(self):
+        for room in self.booking_rooms:
+            room_availability = frappe.get_doc('Room Availability' , {
+                'date': room.booking_date,
+                'room_id': room.room_id
+            })
+
+            room_availability.available_rooms -= room.quantity
+            room_availability.sold_rooms += room.quantity
+            room_availability.save()
+
+
+
 
     def create_sales_invoice(self):
         try:

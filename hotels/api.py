@@ -366,8 +366,6 @@ def create_booking(data):
     if isinstance(data, str):
         data = json.loads(data)
 
-    frappe.logger().info(f"Booking API Payload: {data}")
-
     total_price = 0
     booking_room_map = {}
 
