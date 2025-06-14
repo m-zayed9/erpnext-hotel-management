@@ -390,6 +390,7 @@ def get_room_details(room_id):
 
 @frappe.whitelist(allow_guest=False)
 def create_booking(data):
+    print(data)
     if isinstance(data, str):
         data = json.loads(data)
 
@@ -462,7 +463,7 @@ def create_booking(data):
         }
     )
     booking.insert(ignore_permissions=True)
-    booking.submit()
+    # booking.submit()
 
     booking_dict = booking.as_dict()
     return {"status": "success", "booking": get_booking_details(booking_dict["name"])}
