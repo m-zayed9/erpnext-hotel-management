@@ -186,7 +186,8 @@ def get_hotel_rooms(hotel_id, checkin_date, checkout_date, adults, children, roo
         "latitude": hotel_doc.latitude,
         "longitude": hotel_doc.longitude,
         "images": [img.image for img in hotel_doc.images],
-        "amenities": [a.amenity_id for a in hotel_doc.amenities]
+        "amenities": [a.amenity_id for a in hotel_doc.amenities],
+        "currency": get_default_currency()
     }
 
     # Fetch all room availability entries for this hotel
@@ -255,6 +256,8 @@ def get_hotel_rooms(hotel_id, checkin_date, checkout_date, adults, children, roo
 
     # Sort rooms by price (lowest first)
     rooms_data.sort(key=lambda x: x["average_price"])
+    if rooms_data:
+        hotel_data["lowest_avg_price"] = rooms_data[0]["average_price"]
 
     return {
         "hotel": hotel_data,
@@ -288,7 +291,7 @@ def get_room_details(room_id):
         "latitude": hotel_doc.latitude,
         "longitude": hotel_doc.longitude,
         "images": [img.image for img in hotel_doc.images],
-        "amenities": [a.amenity_id for a in hotel_doc.amenities]
+        "amenities": [a.amenity_id for a in hotel_doc.amenities],
     }
 
     # Fetch all room availability entries for this hotel
