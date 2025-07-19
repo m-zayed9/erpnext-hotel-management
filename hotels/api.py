@@ -7,6 +7,8 @@ import json
 from frappe.utils import nowdate
 from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
 from frappe.utils import flt, nowdate
+from frappe.utils import nowdate
+from frappe.model.naming import make_autoname
 
 
 @frappe.whitelist(allow_guest=False)
@@ -366,7 +368,6 @@ def get_room_details(room_id):
 
 @frappe.whitelist(allow_guest=False)
 def create_booking(data):
-    print(data)
     if isinstance(data, str):
         data = json.loads(data)
 
@@ -515,5 +516,119 @@ def ensure_customer_exists(customer_name):
         customer = new_customer.name
     else:
         customer = existing_customer  # Link to existing customer.name
-    
+
     return customer_name
+
+
+@frappe.whitelist(allow_guest=True)
+def create_sales_invoice_from_reservation(data):
+    try:
+        payload = json.loads(data)
+        reservation = payload.get("json_repr")
+        hotel_bookings = reservation.get("hotelBookings", [])
+        guests = reservation.get("guests", [])
+
+        # --- Customer Name ---
+        customer_name = (
+            f"{guests[0]['firstName']} {guests[0]['lastName']}_{reservation['id']}"
+            if guests
+            else reservation["id"]
+        )
+
+        # --- Ensure Customer Exists ---
+        if not frappe.db.exists("Customer", customer_name):
+            customer = frappe.get_doc(
+                {
+                    "doctype": "Customer",
+                    "customer_name": customer_name,
+                    "customer_type": "Individual",
+                }
+            )
+            customer.flags.ignore_mandatory = True
+            customer.insert(ignore_permissions=True)
+        else:
+            customer = customer_name
+
+        # --- Create Invoice ---
+        invoice = frappe.new_doc("Sales Invoice")
+        invoice.customer = customer
+        invoice.set_posting_time = 1
+        # valid_date = get_valid_fiscal_date()
+        invoice.posting_date = nowdate()
+        invoice.due_date = nowdate()  # Assuming immediate payment
+
+        room_groups = defaultdict(
+            lambda: {
+                "qty": 0,
+                "rate": 0,
+                "description": "",
+                "checkInDate": "",
+                "checkOutDate": "",
+            }
+        )
+
+        # --- Loop through bookings to add rooms ---
+        for booking in hotel_bookings:
+            hotel_offer = booking.get("hotelOffer", {})
+            price_info = hotel_offer.get("price", {})
+            room_info = hotel_offer.get("room", {})
+
+            room_type = room_info.get("type", "ROOM")
+            item_code = f"ROOM-{room_type}"
+            description = room_info.get("description", {}).get("text", "Room Booking")
+            qty = hotel_offer.get("roomQuantity", 1)
+            rate = float(price_info.get("total", 0.0))
+
+            room_groups[item_code]["qty"] += qty
+            room_groups[item_code]["rate"] = rate  # Since total is for one room
+            room_groups[item_code]["description"] = description
+            room_groups[item_code]["checkInDate"] = hotel_offer.get("checkInDate", "")
+            room_groups[item_code]["checkOutDate"] = hotel_offer.get("checkOutDate", "")
+
+        # --- Ensure Items & Add to Invoice ---
+        for item_code, data in room_groups.items():
+            # Create item if it doesn't exist
+            if not frappe.db.exists("Item", item_code):
+                item = frappe.get_doc({
+                    "doctype": "Item",
+                    "item_code": item_code,
+                    "item_name": data["description"][:140],
+                    "description": data["description"],
+                    "stock_uom": "Nos",
+                    "is_stock_item": 0,
+                    "item_group": "Services",
+                    "standard_rate": data["rate"],
+                })
+                item.insert(ignore_permissions=True)
+
+            # Add to invoice
+            invoice.append("items", {
+                "item_code": item_code,
+                "item_name": data["description"][:140],
+                "description": f"{data['description']} | Check-in: {data['checkInDate']} | Check-out: {data['checkOutDate']}",
+                "qty": data["qty"],
+                "rate": data["rate"],
+            })
+
+        # --- Save and Submit ---
+        invoice.insert(ignore_permissions=True)
+        invoice.submit()
+
+        add_payment_to_sales_invoice(
+            invoice_name=invoice.name,
+            paid_amount=invoice.grand_total,  # Assuming full payment
+            payment_mode=payload.get(
+                "payment_mode"
+            ),  # Default payment mode, can be changed
+            paid_date=invoice.posting_date,
+        )
+
+        return {
+            "message": f"Sales Invoice {invoice.name} created successfully.",
+            "invoice": invoice.name,
+        }
+
+    except Exception as e:
+        print(f"Error creating sales invoice: {e}")
+        frappe.log_error(frappe.get_traceback(), "Reservation Invoice Error")
+        frappe.throw(f"Failed to create sales invoice: {e}")
