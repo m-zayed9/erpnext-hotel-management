@@ -596,7 +596,7 @@ def create_sales_invoice_from_reservation(data):
                     "description": data["description"],
                     "stock_uom": "Nos",
                     "is_stock_item": 0,
-                    "item_group": "Services",
+                    "item_group": "Rooms",
                     "standard_rate": data["rate"],
                 })
                 item.insert(ignore_permissions=True)
