@@ -9,6 +9,7 @@ from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_ent
 from frappe.utils import flt, nowdate
 from frappe.utils import nowdate
 from frappe.model.naming import make_autoname
+import pprint
 
 
 @frappe.whitelist(allow_guest=False)
@@ -522,6 +523,7 @@ def ensure_customer_exists(customer_name):
 
 @frappe.whitelist(allow_guest=True)
 def create_sales_invoice_from_reservation(data):
+
     try:
         payload = json.loads(data)
         reservation = payload.get("json_repr")
@@ -565,6 +567,23 @@ def create_sales_invoice_from_reservation(data):
                 "checkInDate": "",
                 "checkOutDate": "",
             }
+        )
+
+        city = reservation.get("city", "")
+        supplier = payload.get("erp_supplier", "")
+
+        if hotel_bookings:
+            first_booking = hotel_bookings[0]
+            hotel = first_booking.get("hotel", {})
+            hotel_name = hotel.get("hotelId", "")
+            hotel_desc = hotel.get("name", "")
+            chain_code = hotel.get("chainCode", "")
+        else:
+            hotel_name = hotel_desc = chain_code = ""
+
+        # create hotel if doesn't exist
+        hotel_doc_name = get_or_create_hotel(
+            hotel_name, hotel_desc, supplier, city, chain_code
         )
 
         # --- Loop through bookings to add rooms ---
@@ -632,3 +651,47 @@ def create_sales_invoice_from_reservation(data):
         print(f"Error creating sales invoice: {e}")
         frappe.log_error(frappe.get_traceback(), "Reservation Invoice Error")
         frappe.throw(f"Failed to create sales invoice: {e}")
+
+
+def get_or_create_supplier(supplier_name):
+    # Check if Supplier exists
+    if frappe.db.exists("Supplier", supplier_name):
+        return supplier_name  # Return name directly
+
+    # Create new Supplier
+    supplier_doc = frappe.get_doc(
+        {
+            "doctype": "Supplier",
+            "supplier_name": supplier_name,
+            "supplier_type": "Company",  # or "Individual" based on your case
+        }
+    )
+    supplier_doc.insert(ignore_permissions=True)
+    return supplier_doc.name
+
+
+def get_or_create_hotel(hotel_name,hotel_desc ,supplier_name, city, chain_code):
+    # Ensure Supplier exists
+    supplier = get_or_create_supplier(supplier_name)
+    # Check if a Hotel exists with the given supplier_id
+    hotel = frappe.db.get_value("Hotel", {"hotel_name": hotel_name}, "name")
+
+    if hotel:
+        return hotel  # Return existing hotel name
+
+    # Otherwise, create a new Hotel
+    hotel_doc = frappe.get_doc(
+        {
+            "doctype": "Hotel",
+            "hotel_name": hotel_name,
+            "description": hotel_desc,
+            "supplier_id": supplier,
+            "city": city,
+            "chain_code": chain_code,
+            "rating": 4,  # Default rating
+            "cover_image": "/files/default_hotel_image.jpg",
+        }
+    )
+    hotel_doc.insert(ignore_permissions=True)
+
+    return hotel_doc.name
