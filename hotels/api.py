@@ -596,13 +596,42 @@ def create_sales_invoice_from_reservation(data):
             item_code = f"ROOM-{room_type}"
             description = room_info.get("description", {}).get("text", "Room Booking")
             qty = hotel_offer.get("roomQuantity", 1)
-            rate = float(price_info.get("total", 0.0))
 
-            room_groups[item_code]["qty"] += qty
-            room_groups[item_code]["rate"] = rate  # Since total is for one room
+            # Safely get check-in and check-out dates
+            check_in_str = hotel_offer.get("checkInDate")
+            check_out_str = hotel_offer.get("checkOutDate")
+
+            # Default nights = 1 if dates are missing or invalid
+            nights = 1
+            try:
+                if check_in_str and check_out_str:
+                    check_in = datetime.strptime(check_in_str, "%Y-%m-%d")
+                    check_out = datetime.strptime(check_out_str, "%Y-%m-%d")
+                    nights = max((check_out - check_in).days, 1)
+            except Exception:
+                nights = 1  # fallback in case of invalid date format
+
+            # Calculate rate per room per night
+            total_price = float(price_info.get("total", 0.0))
+            num_units = qty * nights
+            rate = total_price / num_units if num_units else 0.0
+
+            # Initialize room group entry if not exists
+            if item_code not in room_groups:
+                room_groups[item_code] = {
+                    "rate": 0.0,
+                    "description": "",
+                    "checkInDate": "",
+                    "checkOutDate": "",
+                    "qty": 0
+                }
+
+            room_groups[item_code]["rate"] = rate
             room_groups[item_code]["description"] = description
-            room_groups[item_code]["checkInDate"] = hotel_offer.get("checkInDate", "")
-            room_groups[item_code]["checkOutDate"] = hotel_offer.get("checkOutDate", "")
+            room_groups[item_code]["checkInDate"] = check_in_str or ""
+            room_groups[item_code]["checkOutDate"] = check_out_str or ""
+            room_groups[item_code]["qty"] += num_units
+
 
         # --- Ensure Items & Add to Invoice ---
         for item_code, data in room_groups.items():
