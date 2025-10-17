@@ -101,7 +101,7 @@ def search(checkin_date, checkout_date, adults, children, rooms):
     for r in records:
         grouped[(r.room_id, r.hotel_id)].append(r)
 
-    num_days = (checkout_date - checkin_date).days
+    num_days = (checkout_date - checkin_date).days +1
     hotel_rooms = defaultdict(list)
 
     for (room_id, hotel_id), entries in grouped.items():
@@ -124,7 +124,6 @@ def search(checkin_date, checkout_date, adults, children, rooms):
             "average_price": round(avg_price, 2),
             'currency': get_default_currency()
         })
-
     results = []
     for hotel_id, room_list in hotel_rooms.items():
         hotel_doc = frappe.get_doc("Hotel", hotel_id)
